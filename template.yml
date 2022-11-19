@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: culqi deploy
+Globals:
+  Function:
+    Timeout: 600
+    Runtime: nodejs14.x
+    MemorySize: 512
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        PG_HOST: containers-us-west-127.railway.app
+        PG_PORT: 5488
+        PG_DATABASE: postgres
+        PG_USER: postgres
+        PG_PASSWORD: dzceycWJiY6BJHSr4xUb
+        JWT_SECRET_KEY: QulquiSecret
+        JWT_EXPIRES_TOKEN: 2h
+  Api:
+    Cors:
+      AllowMethods: "'POST, GET, OPTIONS'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+      AllowCredentials: false
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+Resources:
+  saveCreditCard:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./
+      Handler: dist/src/infraestructure/aws/index.handlerSaveCreditCard
+      Events:
+        saveCreditCard:
+          Type: Api 
+          Properties:
+            RestApiId: !Ref PublicApi
+            Path: /save-credit-card
+            Method: post
+  getCreditCard:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ./
+      Handler: dist/src/infraestructure/aws/index.handlerGetCreditCard
+      Events:
+        getCreditCard:
+          Type: Api 
+          Properties:
+            RestApiId: !Ref PrivateApi
+            Path: /get-credit-card
+            Method: get
+  validateToken:
+    Type: 'AWS::Serverless::Function' 
+    Properties:
+      CodeUri: ./
+      Handler: dist/src/infraestructure/aws/index.handlerValidateToken
+
+  PublicApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Auth:
+        ApiKeyRequired: false
+  PrivateApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Auth:
+        AddDefaultAuthorizerToCorsPreflight: false
+        DefaultAuthorizer: MyLambdaTokenAuthorizer
+        Authorizers: 
+          MyLambdaTokenAuthorizer:
+            FunctionArn: !GetAtt validateToken.Arn
+            Identity:
+              Headers:
+                - Authorization
+              ReauthorizeEvery: 0
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+Outputs:
+  PublicApi:
+    Description: "API Gateway endpoint URL for ${Stage} stage"
+    Value: !Sub "https://${PublicApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+  PrivateApi:
+    Description: "API Gateway endpoint URL for ${Stage} stage"
+    Value: !Sub "https://${PrivateApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
